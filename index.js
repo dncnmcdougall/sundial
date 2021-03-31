@@ -2,10 +2,9 @@ import {h, Component, render} from './preact.module.mjs'
 
 import {PlaceM} from './PlaceModel.mjs'
 import {WorldM} from './WorldModel.mjs'
-import {TimeZonesTree} from './timezones.mjs'
 import {sun} from './sun.mjs'
 
-import {PlacesTree} from './places.mjs'
+import {TimeZonesTree} from './timezones.mjs'
 
 function str(thing) {
     if (typeof(thing) == 'number') {
