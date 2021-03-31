@@ -1,0 +1,28 @@
+.main {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+#canvas_container {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+}
+
+#home_select_container {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+}
+
+.place {
+    border-collapse: collapse;
+}
+
+.labelled_input_span label {
+    margin-right: 1em;
+}
+
+.place button {
+}
