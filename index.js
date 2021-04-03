@@ -20,10 +20,10 @@ function placesToUrl() {
         return WorldM.request('World.Places.toStr', worldState, placeId)
     });
 
-    var newUrl = new URL(window.location.origin)
+    var newUrl = new URL(window.location)
 
-    newUrl.searchParams.append('places',placeStrings.join(';'));
-    newUrl.searchParams.append('timezone',worldState.region+';'+worldState.zone);
+    newUrl.searchParams.set('places',placeStrings.join(';'));
+    newUrl.searchParams.set('home',worldState.home);
     console.log(newUrl.href);
     window.location = newUrl;
 }
@@ -38,18 +38,16 @@ function urlToPlaces() {
             worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
         });
     } else {
-        let place = '0:Exeter,50.7236,-3.5275,46,Europe/London,1';
+        let place = '0:Exeter,50.7236,-3.5275,46,Europe,London,1';
         worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
         console.log('default:');
         console.log(worldState);
     }
-    var timezone = parsedUrl.searchParams.get('timezone')
-    if ( timezone && timezone.length > 0 ) {
-        worldState.region = timezone.split(';')[0];
-        worldState.zone = timezone.split(';')[1];
+    var home = parsedUrl.searchParams.get('home')
+    if ( home && home.length > 0 ) {
+        worldState.home = home
     } else {
-        worldState.region = 'UTC';
-        worldState.zone = '';
+        worldState.home = -1;
     }
 }
 
@@ -65,10 +63,15 @@ function onSaveClick(event) {
         const longitude = document.getElementById(placeElementPrefix+'_longitude').value
         const latitude = document.getElementById(placeElementPrefix+'_latitude').value
         const altitude = document.getElementById(placeElementPrefix+'_altitude').value
-        const timezone = document.getElementById(placeElementPrefix+'_tz').value
+
+        const region = document.getElementById(placeElementPrefix+'_region').value
+        const zone = document.getElementById(placeElementPrefix+'_zone').value
+
         const dst = document.getElementById(placeElementPrefix+'_dst').checked
 
-        worldState = WorldM.reduce('World.Places.update', worldState, placeId, name, latitude, longitude, altitude, timezone, dst);
+        worldState = WorldM.reduce('World.Places.update', worldState, placeId, name, 
+            latitude, longitude, altitude, 
+            region, zone, dst);
     });
 
     placesToUrl();
@@ -89,15 +92,13 @@ function onRemoveClick(event) {
 }
 
 
-console.log('---- model ----')
-console.log(WorldM)
 console.log('---- actions ----')
 console.log(WorldM.listActions())
 console.log('---- requests ----')
 console.log(WorldM.listRequests())
 
 var worldState = WorldM.createEmpty();
-worldState = WorldM.reduce('World.setRegion', worldState, 'UTC');
+worldState = WorldM.reduce('World.setHome', worldState,-1);
 
 urlToPlaces()
 
@@ -107,40 +108,27 @@ console.log('----')
 
 rerender();
 
-
-function onRegionChange(event) {
-    console.log(event.target.selectedOptions[0].value)
-    worldState = WorldM.reduce('World.setRegion', worldState, event.target.selectedOptions[0].value);
+function onHomeChange(event) {
+    worldState = WorldM.reduce('World.setHome', worldState, event.target.selectedOptions[0].value);
+    console.log('OnHome:');
+    console.log(event.target.selectedOptions[0].value);
+    console.log(worldState);
     rerender();
 }
 
-function onTimeZoneChange() {
-    console.log(event.target.selectedOptions[0].value)
-    worldState = WorldM.reduce('World.setZone', worldState, event.target.selectedOptions[0].value);
+function reducePlace(action, placeId, value) {
+    console.log('reduce: '+action+': '+value);
+    worldState = WorldM.reduce('World.Places.'+action, worldState, placeId, value);
     rerender();
 }
 
-function renderRegionSelect() {
-    var regions = [ h('option', {value:'UTC', selected:('UTC'==worldState.region)},['UTC']) ];
-    Object.keys(TimeZonesTree).forEach( (region) => {
-            regions.push( h('option', {value:region, selected:(region==worldState.region)},[region]) );
+function renderHomeSelect() {
+    var regions = [ h('option', {value:-1, selected:(-1==worldState.home)},['UTC']) ];
+    Object.keys(worldState.Places).forEach( (placeId) => {
+            regions.push( h('option', {value:placeId, selected:(placeId==worldState.home)},[worldState.Places[placeId].name]) );
     });
-    return h('select', {onChange:onRegionChange }, 
+    return h('select', {onChange:onHomeChange }, 
         regions
-    );
-}
-
-function renderZoneSelect() {
-    var region = worldState.region;
-    console.log('rengerZone '+region);
-    var options = [];
-    if (region in TimeZonesTree) {
-        options = TimeZonesTree[region].map( (region) => {
-            return h('option', {value:region},[region]);
-        });
-    } 
-    return h('select', {onChange:onTimeZoneChange}, 
-        options
     );
 }
 
@@ -151,17 +139,15 @@ function rerender() {
             h('canvas', {id:'canvas', width:300, height:300},[]),
         ]),
         h('div',{id:'home_select_container'}, [
-            renderRegionSelect(),
-            renderZoneSelect()
+            renderHomeSelect()
         ]),
-        WorldM.request('World.renderPlaces', worldState, onRemoveClick, onSaveClick, onAddClick)
+        WorldM.request('World.renderPlaces', worldState, 
+            reducePlace, onRemoveClick, onSaveClick, onAddClick)
     ]);
 
     render(app, document.body);
     paintPlaces();
 }
-
-
 
 function getPoint(angle, r, centre) {
     centre = centre || {x:0,y:0};
@@ -171,9 +157,7 @@ function getPoint(angle, r, centre) {
     };
 }
 
-
 function paintPlaces() {
-    console.log('paint');
     const canvas = document.getElementById('canvas');
     var ctx = canvas.getContext('2d');
 
@@ -182,8 +166,14 @@ function paintPlaces() {
     var month = now.getUTCMonth();
     var year = now.getUTCFullYear();
 
+    console.log(year+'-'+(month+1)+'-'+day);
     var nowFrac = (now.getUTCSeconds() + now.getUTCMinutes()*60 + now.getUTCHours()*3600)/86400;
 
+    var homeTimezone = 0;
+    if (worldState.home >= 0 ) {
+        homeTimezone = WorldM.request('World.Places.State', worldState, worldState.home).timezone;
+    };
+    console.log('home: '+homeTimezone);
     var times = {};
 
     var r = 100;
@@ -238,17 +228,23 @@ function paintPlaces() {
     placeIds.forEach( (placeId) => {
         var placeState = WorldM.request('World.Places.State', worldState, placeId);
         times = PlaceM.request('Place.utcTimes', placeState, year, month, day);
+        console.log(placeState.name);
+        console.log('noon: '+times.noon+' rise: '+times.rise+' set: '+times.set);
+        console.log('noon angle: '+times.noonAngle);
         ctx.setTransform(1,0,0,1,0,0);
         ctx.translate(centre.x, centre.y);
+        ctx.rotate( (homeTimezone/12) * Math.PI);
         ctx.rotate( (times.noonAngle)/180 * Math.PI);
 
-        var risePoint = getPoint(-times.hourAngle, r);
-        var setPoint = getPoint(times.hourAngle, r);
-        var noonPoint = getPoint(times.noonAngle, r);
+        var setPoint = getPoint(180-times.hourAngle, r);
+        var risePoint = getPoint(180+times.hourAngle, r);
+        var noonPoint = getPoint(180+times.noonAngle, r);
 
         ctx.beginPath();
         ctx.moveTo(risePoint.x, risePoint.y);
         ctx.lineTo(setPoint.x, setPoint.y);
+        // ctx.moveTo((risePoint.x + setPoint.x)/2, (risePoint.y + setPoint.y)/2);
+        // ctx.lineTo(noonPoint.x, noonPoint.y);
         ctx.stroke();
 
         var textSize = ctx.measureText(placeState.name);

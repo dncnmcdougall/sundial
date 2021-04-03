@@ -36,8 +36,8 @@ with open('./places/timeZones.txt','r') as timezoneFile:
         zone = parts[-1]
 
         if region not in timezoneTree:
-            timezoneTree[region] = []
-        timezoneTree[region].append(zone)
+            timezoneTree[region] = {}
+        timezoneTree[region][zone] = [GMT,DST];
 
         if len(parts) > 2:
             print(timezone)
