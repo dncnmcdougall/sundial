@@ -234,11 +234,14 @@ function paintPlaces() {
         ctx.setTransform(1,0,0,1,0,0);
         ctx.translate(centre.x, centre.y);
         ctx.rotate( (homeTimezone/12) * Math.PI);
+        // ctx.rotate( (placeState.timezone+homeTimezone)/180 * Math.PI);
+        // ctx.rotate( (-placeState.timezone)/12 * Math.PI);
         ctx.rotate( (times.noonAngle)/180 * Math.PI);
 
         var setPoint = getPoint(180-times.hourAngle, r);
         var risePoint = getPoint(180+times.hourAngle, r);
-        var noonPoint = getPoint(180+times.noonAngle, r);
+        // var noonPoint = getPoint(180+times.noonAngle, r);
+        var noonPoint = getPoint(180, r);
 
         ctx.beginPath();
         ctx.moveTo(risePoint.x, risePoint.y);
