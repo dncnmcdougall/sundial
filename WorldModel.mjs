@@ -6,6 +6,7 @@ import {PlaceM} from './PlaceModel.mjs'
 
 var WorldMC = new ModelCreator('World');
 WorldMC.addProperty('home', 'number');
+WorldMC.addProperty('timezone', 'number');
 WorldMC.addChildAsCollection(PlaceM)
 
 WorldMC.addAddActionFor(PlaceM,'AddPlaceWithID')
