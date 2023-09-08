@@ -57,8 +57,10 @@ function urlToPlaces() {
     }
 }
 
-function onChange(event) {
-
+function onThemeChange(event) {
+    if (worldState.dark == 'os') {
+        rerender();
+    }
 }
 
 function onSaveClick(event) {
@@ -105,6 +107,7 @@ console.log(WorldM.listRequests())
 
 var worldState = WorldM.createEmpty();
 worldState = WorldM.reduce('World.setHome', worldState,-1);
+worldState = WorldM.reduce('World.setDark', worldState,'os');
 
 urlToPlaces()
 
@@ -112,20 +115,41 @@ console.log('---- state ----')
 console.log(worldState)
 console.log('----')
 
+const rootStyle = document.querySelector(':root').style;
+const colorSchemeElement = document.getElementById('color-scheme');
+const darkMatches = window.matchMedia("(prefers-color-scheme: dark)");
+darkMatches.addEventListener('change', onThemeChange);
+onThemeChange(darkMatches);
 rerender();
+
+function isDark() {
+    if ( worldState.dark == 'os' ) {
+        return darkMatches.matches;
+    } else {
+        return worldState.dark == 'dark';
+    }
+}
 
 function onHomeChange(event) {
     worldState = WorldM.reduce('World.setHome', worldState, event.target.selectedOptions[0].value);
-    console.log('OnHome:');
-    console.log(event.target.selectedOptions[0].value);
-    console.log(worldState);
     rerender();
 }
 
 function reducePlace(action, placeId, value) {
-    console.log('reduce: '+action+': '+value);
     worldState = WorldM.reduce('World.Places.'+action, worldState, placeId, value);
     rerender();
+}
+
+function reduceWorld(action, value) {
+    worldState = WorldM.reduce('World.'+action, worldState, value);
+    rerender();
+}
+
+function renderToggleSwitch(checked, onChange) {
+    return h('label', {class:'switch'},[
+        h('input', {type:'checkbox', checked:checked, onChange:onChange},[]),
+        h('span',{class:'slider'},[])
+    ]);
 }
 
 function renderHomeSelect() {
@@ -133,8 +157,11 @@ function renderHomeSelect() {
     Object.keys(worldState.Places).forEach( (placeId) => {
         regions.push( h('option', {value:placeId, selected:(placeId==worldState.home)},[worldState.Places[placeId].name]) );
     });
-    return h('div', {id:'home'}, [
-        h('h1',{},'Home'),
+    return h('div', {id:'home_select_container'}, [
+        h('span', {id:'home_title'}, [
+            h('h1',{},'Home'), 
+            WorldM.request('World.renderDarkSelect', worldState, reduceWorld)
+        ]),
         h('select', {onChange:onHomeChange }, 
             regions
         )
@@ -142,15 +169,20 @@ function renderHomeSelect() {
 }
 
 function rerender() {
+
+    console.log('-- rerender --');
+    console.log(rootStyle);
+    rootStyle.setProperty('--primary-text', (isDark()? 'white' : 'black'));
+    rootStyle.setProperty('--secondary-text', (isDark()? 'grey' : 'darkgrey'));
+    colorSchemeElement.content = (isDark()? 'dark' : 'light');
+
     const app = h('div', {class:'main'}, [
         h('div', {id:'canvas_container'}, [
             h('h1',{},'Sundial'),
             h('canvas', {id:'canvas', width:canvasSize, height:canvasSize},[]),
         ]),
         h('div', {id:'home_and_places'}, [
-            h('div',{id:'home_select_container'}, [
-                renderHomeSelect()
-            ]),
+            renderHomeSelect(),
             WorldM.request('World.renderPlaces', worldState, 
                 reducePlace, onRemoveClick, onSaveClick, onAddClick)
         ])
@@ -184,23 +216,69 @@ function paintHomeNight(ctx, centre, r, worldState, year, month, day)
     const setPoint = getPoint(180-times.hourAngle, r);
     const midPoint = {'x': (risePoint.x+setPoint.x)/2, 'y':(risePoint.y+setPoint.y)/2};
     const nightPoint = getPoint(0, r);
+    const riseAngle = ((-90-times.hourAngle))/180*Math.PI;
+    const setAngle = ((-90+times.hourAngle))/180*Math.PI;
 
-    const gradient = ctx.createLinearGradient(midPoint.x, midPoint.y, nightPoint.x, nightPoint.y);
-    gradient.addColorStop(0, '#ddd');
-    gradient.addColorStop(0.1, '#888');
-    gradient.addColorStop(0.2, '#555');
-    // gradient.addColorStop(0.3, '#444');
-    gradient.addColorStop(1, '#333');
-
-    ctx.fillStyle=gradient;
-    ctx.beginPath();
-    ctx.moveTo(risePoint.x, risePoint.y);
-    const riseAngle = (270+times.hourAngle)/180*Math.PI;
-    const setAngle = (270-times.hourAngle)/180*Math.PI;
+    console.log(times.hourAngle);
     console.log(riseAngle, setAngle)
-    ctx.arc(0, 0, r, riseAngle, setAngle);
-    // ctx.lineTo(risePoint.x, risePoint.y);
-    ctx.fill();
+    console.log(midPoint.x, midPoint.y)
+    console.log(risePoint.x, risePoint.y)
+
+
+    if ( isDark() ) {
+        const dayGradient = ctx.createConicGradient(Math.PI, midPoint.x,midPoint.y);
+        dayGradient.addColorStop(0, 'crimson');
+        dayGradient.addColorStop(0.01, 'orange');
+        dayGradient.addColorStop(0.05, 'deepskyblue');
+
+        dayGradient.addColorStop(0.15, 'blue');
+        dayGradient.addColorStop(0.35, 'blue');
+
+        dayGradient.addColorStop(0.45, 'deepskyblue');
+        dayGradient.addColorStop(0.49, 'orange');
+        dayGradient.addColorStop(0.5, 'crimson');
+
+        ctx.fillStyle=dayGradient;
+            ctx.beginPath();
+            ctx.moveTo(risePoint.x, risePoint.y);
+            ctx.arc(0, 0, r, riseAngle, setAngle, false);
+        for ( let i =0;i<4;i++) {
+            ctx.fill();
+        }
+
+    }
+    else
+{
+        const nightGradient = ctx.createConicGradient(0, midPoint.x,midPoint.y);
+        nightGradient.addColorStop(0, '#fff');
+        nightGradient.addColorStop(0.01, '#888');
+        nightGradient.addColorStop(0.05, '#555');
+
+        nightGradient.addColorStop(0.1, '#333');
+        nightGradient.addColorStop(0.4, '#333');
+
+        nightGradient.addColorStop(0.45, '#555');
+        nightGradient.addColorStop(0.49, '#888');
+        nightGradient.addColorStop(0.5, '#fff');
+
+        nightGradient.addColorStop(1, '#fff');
+
+        // const nightGradient = ctx.createLinearGradient(midPoint.x, midPoint.y, nightPoint.x, nightPoint.y);
+        // nightGradient.addColorStop(0, '#ddd');
+        // nightGradient.addColorStop(0.1, '#888');
+        // nightGradient.addColorStop(0.2, '#555');
+        // nightGradient.addColorStop(1, '#333');
+
+
+        ctx.fillStyle=nightGradient;
+        for ( let i =0;i<4;i++) {
+            ctx.beginPath();
+            ctx.moveTo(risePoint.x, risePoint.y);
+            ctx.arc(0, 0, r, riseAngle, setAngle, true);
+            ctx.lineTo(risePoint.x, risePoint.y);
+            ctx.fill();
+        }
+    }
     ctx.restore();
 }
 
@@ -215,8 +293,6 @@ function paintPlace(ctx, centre, r, homeTimezone, placeId, worldState, year, mon
     ctx.setTransform(1,0,0,1,0,0);
     ctx.translate(centre.x, centre.y);
     ctx.rotate( (homeTimezone/12) * Math.PI);
-    // ctx.rotate( (placeState.timezone+homeTimezone)/180 * Math.PI);
-    // ctx.rotate( (-placeState.timezone)/12 * Math.PI);
     ctx.rotate( (times.noonAngle)/180 * Math.PI);
 
     var setPoint = getPoint(180-times.hourAngle, r);
@@ -229,7 +305,7 @@ function paintPlace(ctx, centre, r, homeTimezone, placeId, worldState, year, mon
 
     var textSize = ctx.measureText(placeState.name);
     var textHeight = textSize.actualBoundingBoxAscent + textSize.actualBoundingBoxDescent;
-    ctx.fillText(placeState.name, risePoint.x, risePoint.y - textHeight);
+    ctx.fillText(placeState.name, risePoint.x+5, risePoint.y - textHeight);
 }
 
 function paintPlaces() {
@@ -261,13 +337,14 @@ function paintPlaces() {
     console.log('home: '+homeTimezone);
 
     ctx.beginPath(); 
+    ctx.strokeStyle= (isDark()? '#fff': '#000');
     ctx.arc(centre.x, centre.y, r, 0, 2*Math.PI);
     ctx.stroke(); 
 
     ctx.save()
-    ctx.shadowColor= '#ffffff';
+    ctx.shadowColor= ( isDark()? '#000' : '#fff');
     ctx.shadowBlur= 5;
-    ctx.strokeStyle= '#88f';
+    ctx.strokeStyle= '#4B4';
     ctx.setLineDash([7,2, 2,2]);
     ctx.beginPath();
     ctx.moveTo(centre.x, centre.y - r);
@@ -282,7 +359,7 @@ function paintPlaces() {
 
     ctx.save()
     ctx.fillStyle= '#a91';
-    ctx.strokeStyle= '#000000';
+    ctx.strokeStyle= (isDark()? '#fff': '#000');
     ctx.strokeWidth= '0.4px';
     var nowPoint = getPoint(-nowFrac*360, r+ textHeight*2 + 20, centre);
     ctx.setTransform(1,0,0,1,0,0);
@@ -290,6 +367,11 @@ function paintPlaces() {
     sun(ctx, 20, 20)
     ctx.restore()
 
+
+    ctx.strokeStyle= (isDark()? '#fff': '#000');
+    ctx.fillStyle= (isDark()? '#fff': '#000');
+    ctx.shadowColor= ( isDark()? '#000' : '#fff');
+    ctx.shadowBlur= 5;
 
     ctx.save()
     ctx.setTransform(1,0,0,1,0,0);
@@ -303,10 +385,6 @@ function paintPlaces() {
         ctx.fillText(text, -textSize.width/2, -r - textHeight);
     }
     ctx.restore()
-
-    ctx.strokeStyle= '#000000';
-    ctx.shadowColor= '#ffffff';
-    ctx.shadowBlur= 5;
 
     let placeIds = Object.keys(worldState.Places);
     placeIds.forEach( (placeId) => {
