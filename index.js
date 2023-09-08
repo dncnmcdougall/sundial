@@ -40,9 +40,9 @@ function urlToPlaces() {
             worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
         });
     } else {
-        let places = ['0:London,51.50853,-0.12574,25,Europe,London,1',
+        let places = ['0:Exeter,50.7236,-3.52751,46,Europe,London,1',
             '1:Seoul,37.566,126.9784,38,Asia,Seoul,0',
-            '2:New York,40.71427,-74.00597,57,America,New_York,0'];
+            '2:Portland,45.52345,-122.67621,15,America,Los_Angeles,0'];
         places.forEach( (place) => { 
             worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
         });
