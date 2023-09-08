@@ -53,17 +53,21 @@ about backwards compatibility)
 
 ## Technical details
 
-The sunrise/sunset times are calculated based on the [sunrise
-equation]{https://en.wikipedia.org/wiki/Sunrise_equation} using the specified
+The sunrise/sunset times are calculated based on the [sunrise equation](https://en.wikipedia.org/wiki/Sunrise_equation) using the specified
 coordinates. This uses the latitude and longitude. Currently, the altitude is
 ignored, although the equation does have space for this.
 
 The available time zones are extracted from the freely available data provided by
-[https://www.geonames.org/]{https://www.geonames.org/}. 
+[https://www.geonames.org/](https://www.geonames.org/). 
 
 The home time zone is the one where noon will be at the top centre of the
 circle. More intuitively the home time zone have the wall clock time at sunrise
 when the sun is rising in that place.
+
+The code is built on top of my
+[ModelReducer](https://github.com/dncnmcdougall/ModelReducer) code for storing
+the state and on the excellent [PReact](https://preactjs.com/) code for
+rendering the webpage.
 
 ## Further work
 
@@ -74,7 +78,7 @@ thought to use the specified lat and long to lookup the place and time zone, but
 the appropriate JS file is 8Mb! More ergonomic (but with lower resolution) may
 be to only provide a place lookup for "major settlements". This may result in a
 sufficiently small webpage. An alternative would be to create a query able
-static database like [Hosting SQLite databases on Github Pages]{https://phiresky.github.io/blog/2021/hosting-sqlite-databases-on-github-pages/}.
+static database like [Hosting SQLite databases on Github Pages](https://phiresky.github.io/blog/2021/hosting-sqlite-databases-on-github-pages/).
 
 Another neat trick would be to include the weather at home around the outised of
 the circle.
