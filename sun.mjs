@@ -1,5 +1,7 @@
 import {h} from './preact.module.mjs'
 
+// This is an exported SVG
+
 export var sun = function(ctx, w,h) {
     w = w/24;
     h = h/24;

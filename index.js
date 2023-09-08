@@ -6,6 +6,8 @@ import {sun} from './sun.mjs'
 
 import {TimeZonesTree} from './timezones.mjs'
 
+const canvasSize = 400;
+
 function str(thing) {
     if (typeof(thing) == 'number') {
         return thing.toString();
@@ -38,8 +40,12 @@ function urlToPlaces() {
             worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
         });
     } else {
-        let place = '0:Exeter,50.7236,-3.5275,46,Europe,London,1';
-        worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
+        let places = ['0:London,51.50853,-0.12574,25,Europe,London,1',
+            '1:Seoul,37.566,126.9784,38,Asia,Seoul,0',
+            '2:New York,40.71427,-74.00597,57,America,New_York,0'];
+        places.forEach( (place) => { 
+            worldState = WorldM.reduce('World.AddPlaceFromStr',worldState, place);
+        });
         console.log('default:');
         console.log(worldState);
     }
@@ -47,7 +53,7 @@ function urlToPlaces() {
     if ( home && home.length > 0 ) {
         worldState.home = home
     } else {
-        worldState.home = -1;
+        worldState.home = 0;
     }
 }
 
@@ -125,24 +131,29 @@ function reducePlace(action, placeId, value) {
 function renderHomeSelect() {
     var regions = [ h('option', {value:-1, selected:(-1==worldState.home)},['UTC']) ];
     Object.keys(worldState.Places).forEach( (placeId) => {
-            regions.push( h('option', {value:placeId, selected:(placeId==worldState.home)},[worldState.Places[placeId].name]) );
+        regions.push( h('option', {value:placeId, selected:(placeId==worldState.home)},[worldState.Places[placeId].name]) );
     });
-    return h('select', {onChange:onHomeChange }, 
-        regions
-    );
+    return h('div', {id:'home'}, [
+        h('h1',{},'Home'),
+        h('select', {onChange:onHomeChange }, 
+            regions
+        )
+    ]);
 }
 
 function rerender() {
     const app = h('div', {class:'main'}, [
         h('div', {id:'canvas_container'}, [
-            h('h1',{},'Canvas'),
-            h('canvas', {id:'canvas', width:300, height:300},[]),
+            h('h1',{},'Sundial'),
+            h('canvas', {id:'canvas', width:canvasSize, height:canvasSize},[]),
         ]),
-        h('div',{id:'home_select_container'}, [
-            renderHomeSelect()
-        ]),
-        WorldM.request('World.renderPlaces', worldState, 
-            reducePlace, onRemoveClick, onSaveClick, onAddClick)
+        h('div', {id:'home_and_places'}, [
+            h('div',{id:'home_select_container'}, [
+                renderHomeSelect()
+            ]),
+            WorldM.request('World.renderPlaces', worldState, 
+                reducePlace, onRemoveClick, onSaveClick, onAddClick)
+        ])
     ]);
 
     render(app, document.body);
@@ -157,6 +168,70 @@ function getPoint(angle, r, centre) {
     };
 }
 
+function paintHomeNight(ctx, centre, r, worldState, year, month, day)
+{
+    var placeState = WorldM.request('World.Places.State', worldState, worldState.home);
+    var homeTimezone = placeState.timezone
+    var times = PlaceM.request('Place.utcTimes', placeState, year, month, day);
+    ctx.save();
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.translate(centre.x, centre.y);
+    ctx.rotate( (homeTimezone/12) * Math.PI);
+    ctx.rotate( (times.noonAngle)/180 * Math.PI);
+
+    const risePoint = getPoint(180+times.hourAngle, r);
+    const setPoint = getPoint(180-times.hourAngle, r);
+    const midPoint = {'x': (risePoint.x+setPoint.x)/2, 'y':(risePoint.y+setPoint.y)/2};
+    const nightPoint = getPoint(0, r);
+
+    const gradient = ctx.createLinearGradient(midPoint.x, midPoint.y, nightPoint.x, nightPoint.y);
+    gradient.addColorStop(0, '#ddd');
+    gradient.addColorStop(0.1, '#888');
+    gradient.addColorStop(0.2, '#555');
+    // gradient.addColorStop(0.3, '#444');
+    gradient.addColorStop(1, '#333');
+
+    ctx.fillStyle=gradient;
+    ctx.beginPath();
+    ctx.moveTo(risePoint.x, risePoint.y);
+    const riseAngle = (270+times.hourAngle)/180*Math.PI;
+    const setAngle = (270-times.hourAngle)/180*Math.PI;
+    console.log(riseAngle, setAngle)
+    ctx.arc(0, 0, r, riseAngle, setAngle);
+    // ctx.lineTo(risePoint.x, risePoint.y);
+    ctx.fill();
+    ctx.restore();
+}
+
+
+function paintPlace(ctx, centre, r, homeTimezone, placeId, worldState, year, month, day)
+{
+    var placeState = WorldM.request('World.Places.State', worldState, placeId);
+    var times = PlaceM.request('Place.utcTimes', placeState, year, month, day);
+    console.log(placeState.name);
+    console.log('noon: '+times.noon+' rise: '+times.rise+' set: '+times.set);
+    console.log('noon angle: '+times.noonAngle);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.translate(centre.x, centre.y);
+    ctx.rotate( (homeTimezone/12) * Math.PI);
+    // ctx.rotate( (placeState.timezone+homeTimezone)/180 * Math.PI);
+    // ctx.rotate( (-placeState.timezone)/12 * Math.PI);
+    ctx.rotate( (times.noonAngle)/180 * Math.PI);
+
+    var setPoint = getPoint(180-times.hourAngle, r);
+    var risePoint = getPoint(180+times.hourAngle, r);
+
+    ctx.beginPath();
+    ctx.moveTo(risePoint.x, risePoint.y);
+    ctx.lineTo(setPoint.x, setPoint.y);
+    ctx.stroke();
+
+    var textSize = ctx.measureText(placeState.name);
+    var textHeight = textSize.actualBoundingBoxAscent + textSize.actualBoundingBoxDescent;
+    ctx.fillText(placeState.name, risePoint.x, risePoint.y - textHeight);
+}
+
 function paintPlaces() {
     const canvas = document.getElementById('canvas');
     var ctx = canvas.getContext('2d');
@@ -169,38 +244,43 @@ function paintPlaces() {
     console.log(year+'-'+(month+1)+'-'+day);
     var nowFrac = (now.getUTCSeconds() + now.getUTCMinutes()*60 + now.getUTCHours()*3600)/86400;
 
-    var homeTimezone = 0;
-    if (worldState.home >= 0 ) {
-        homeTimezone = WorldM.request('World.Places.State', worldState, worldState.home).timezone;
-    };
-    console.log('home: '+homeTimezone);
-    var times = {};
 
-    var r = 100;
-    var centre = {x:150,y:150};
+    var r = 150;
+    var centre = {x:canvasSize/2,y:canvasSize/2};
 
+    ctx.reset();
     ctx.setTransform(1,0,0,1,0,0);
 
-    ctx.fillStyle= '#ffffff';
-    ctx.fillRect(0,0,300,300); 
-    ctx.fillStyle= '#000000';
+
+    let homeId = worldState.home;
+    var homeTimezone = 0;
+    if (homeId >= 0) {
+        homeTimezone = WorldM.request('World.Places.State', worldState, homeId).timezone;
+        paintHomeNight(ctx, centre, r, worldState, year, month, day);
+    }
+    console.log('home: '+homeTimezone);
 
     ctx.beginPath(); 
     ctx.arc(centre.x, centre.y, r, 0, 2*Math.PI);
     ctx.stroke(); 
 
+    ctx.save()
+    ctx.shadowColor= '#ffffff';
+    ctx.shadowBlur= 5;
     ctx.strokeStyle= '#88f';
+    ctx.setLineDash([7,2, 2,2]);
     ctx.beginPath();
     ctx.moveTo(centre.x, centre.y - r);
     ctx.lineTo(centre.x, centre.y + r);
     ctx.moveTo(centre.x - r, centre.y);
     ctx.lineTo(centre.x + r, centre.y);
     ctx.stroke();
-    ctx.strokeStyle= '#000000';
+    ctx.restore()
 
     var textSize = ctx.measureText('10');
     var textHeight = textSize.actualBoundingBoxAscent + textSize.actualBoundingBoxDescent;
 
+    ctx.save()
     ctx.fillStyle= '#a91';
     ctx.strokeStyle= '#000000';
     ctx.strokeWidth= '0.4px';
@@ -208,10 +288,10 @@ function paintPlaces() {
     ctx.setTransform(1,0,0,1,0,0);
     ctx.translate(nowPoint.x - 10 , nowPoint.y - 10 );
     sun(ctx, 20, 20)
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.fillStyle= '#000';
+    ctx.restore()
 
 
+    ctx.save()
     ctx.setTransform(1,0,0,1,0,0);
     ctx.translate(centre.x, centre.y);
     ctx.rotate( -Math.PI);
@@ -222,37 +302,15 @@ function paintPlaces() {
         var textHeight = textSize.actualBoundingBoxAscent + textSize.actualBoundingBoxDescent;
         ctx.fillText(text, -textSize.width/2, -r - textHeight);
     }
-    ctx.setTransform(1,0,0,1,0,0);
+    ctx.restore()
+
+    ctx.strokeStyle= '#000000';
+    ctx.shadowColor= '#ffffff';
+    ctx.shadowBlur= 5;
 
     let placeIds = Object.keys(worldState.Places);
     placeIds.forEach( (placeId) => {
-        var placeState = WorldM.request('World.Places.State', worldState, placeId);
-        times = PlaceM.request('Place.utcTimes', placeState, year, month, day);
-        console.log(placeState.name);
-        console.log('noon: '+times.noon+' rise: '+times.rise+' set: '+times.set);
-        console.log('noon angle: '+times.noonAngle);
-        ctx.setTransform(1,0,0,1,0,0);
-        ctx.translate(centre.x, centre.y);
-        ctx.rotate( (homeTimezone/12) * Math.PI);
-        // ctx.rotate( (placeState.timezone+homeTimezone)/180 * Math.PI);
-        // ctx.rotate( (-placeState.timezone)/12 * Math.PI);
-        ctx.rotate( (times.noonAngle)/180 * Math.PI);
-
-        var setPoint = getPoint(180-times.hourAngle, r);
-        var risePoint = getPoint(180+times.hourAngle, r);
-        // var noonPoint = getPoint(180+times.noonAngle, r);
-        var noonPoint = getPoint(180, r);
-
-        ctx.beginPath();
-        ctx.moveTo(risePoint.x, risePoint.y);
-        ctx.lineTo(setPoint.x, setPoint.y);
-        // ctx.moveTo((risePoint.x + setPoint.x)/2, (risePoint.y + setPoint.y)/2);
-        // ctx.lineTo(noonPoint.x, noonPoint.y);
-        ctx.stroke();
-
-        var textSize = ctx.measureText(placeState.name);
-        var textHeight = textSize.actualBoundingBoxAscent + textSize.actualBoundingBoxDescent;
-        ctx.fillText(placeState.name, risePoint.x, risePoint.y - textHeight);
+        paintPlace(ctx, centre, r, homeTimezone, placeId, worldState, year, month, day);
     });
 }
 
