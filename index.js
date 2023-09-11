@@ -122,6 +122,8 @@ darkMatches.addEventListener('change', onThemeChange);
 onThemeChange(darkMatches);
 rerender();
 
+let intervalTimer = window.setInterval(rerender, 1000*60*15); // update every 15 minutes.
+
 function isDark() {
     if ( worldState.dark == 'os' ) {
         return darkMatches.matches;
