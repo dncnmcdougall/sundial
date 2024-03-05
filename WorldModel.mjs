@@ -75,7 +75,7 @@ WorldMC.addRequest( 'renderDarkSelect', function(state, reduce, inputProp) {
             h('span', Object.assign({
                 alt:label,
                 class:'dark-select-span',
-                style:'mask-image:url(/theme-'+options[label]+'.svg);',
+                style:'mask-image:url(./theme-'+options[label]+'.svg);',
             }, inputProp),[])
         ]);
     });
